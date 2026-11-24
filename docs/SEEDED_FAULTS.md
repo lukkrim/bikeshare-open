@@ -129,3 +129,35 @@ Each fault was seeded in the working tree (data faults in a temp copy), the real
   ```
 - **Fix:** `git checkout -- src/features.py`, rebuilt features and metrics; suite back to `18 passed`.
 - **Agent turns to fix:** 1.
+
+## 3. `raise` removed from the weather encoder
+
+- **Fault** (`src/features.py`, `encode_weather`):
+  ```diff
+  -        raise ValueError(f"unmapped weather labels: {sorted(unknown)}")
+  +        pass
+  ```
+- **Predicted:** nothing goes red on the real data. The `raise` only runs on an unknown label, and the CSV has only GOOD/MISTY/BAD. With an unknown label, `test_only_expected_rows_are_dropped` should catch the silent NaN -> `dropna` row loss.
+- **Caught by, real data:** nothing. Hook silent (leakage tests passed); `make test` green. The fault is latent.
+- **Hook stderr:** none (exit 0). The hook only runs `tests/test_leakage.py`, which cannot see this.
+- **`make test` output** (complete, real data):
+  ```
+  python -m pytest tests/ -q
+  ..................                                                       [100%]
+  18 passed in 1.80s
+  ```
+- **Caught by, with a data fault:** a temp copy of the CSV with `BAD` relabelled `STORMY` (the real file untouched, SHA-256 still `a6bed1577f6e4de5...`), tests pointed at it in-process. `tests/test_contract.py::test_only_expected_rows_are_dropped` goes red: the 18 BAD days outside the warm-up windows vanish (2 were already dropped as warm-up). Prediction matched.
+  ```
+  .F................                                                       [100%]
+  =================================== FAILURES ===================================
+  E   AssertionError: lost 74 rows; expected at most 56
+      assert 74 <= 56
+  /Users/wanfranek/Documents/DSC 180AB Capstone/MA6/bikeshare-open/tests/test_contract.py:51: AssertionError: lost 74 rows; expected at most 56
+  =========================== short test summary info ============================
+  FAILED tests/test_contract.py::test_only_expected_rows_are_dropped - Assertio...
+  1 failed, 17 passed in 1.24s
+  ```
+  Control, same STORMY copy with the `raise` intact: `3 passed, 15 errors`, every error `ValueError: unmapped weather labels: ['STORMY']`.
+- **Takeaway:** the `raise` is the first line of defence; the exact row-loss bound is the backstop. The bound would catch even one silently dropped row, because 56 is exact for this data.
+- **Fix:** `git checkout -- src/features.py`; suite back to `18 passed`.
+- **Agent turns to fix:** 1.
