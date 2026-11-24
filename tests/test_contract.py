@@ -3,7 +3,15 @@ import pandas as pd
 import pytest
 from sklearn.metrics import r2_score
 
-from src.config import LAG_WARMUP, TARGET
+from src.config import (
+    DATE_COL,
+    ENCODED_COLS,
+    FORBIDDEN,
+    LAG_WARMUP,
+    RAW,
+    RAW_FEATURE_COLS,
+    TARGET,
+)
 from src.features import build_features, feature_columns, reindex_to_calendar
 from src.ingest import load_raw
 from src.train import MODELS, temporal_split
@@ -41,6 +49,30 @@ def test_only_expected_rows_are_dropped(raw, feats):
     allowed_loss = LAG_WARMUP + LAG_WARMUP * missing_days
     lost = len(raw) - len(feats)
     assert lost <= allowed_loss, f"lost {lost} rows; expected at most {allowed_loss}"
+
+
+def test_every_raw_column_is_classified():
+    """feature_columns() is a denylist, so a new numeric column in the raw
+    CSV would silently become a feature. Read the header straight from disk
+    (not via load_raw) and require each column in exactly one bucket."""
+    header = pd.read_csv(RAW, nrows=0).columns
+    buckets = {
+        "FORBIDDEN": FORBIDDEN,
+        "RAW_FEATURE_COLS": RAW_FEATURE_COLS,
+        "ENCODED_COLS": ENCODED_COLS,
+        "DATE_COL": {DATE_COL},
+    }
+    unclassified = [c for c in header if not any(c in b for b in buckets.values())]
+    assert not unclassified, f"unclassified raw columns: {unclassified}"
+    doubled = [c for c in header if sum(c in b for b in buckets.values()) > 1]
+    assert not doubled, f"columns in more than one bucket: {doubled}"
+
+
+def test_raw_features_reach_the_model(feats):
+    """RAW_FEATURE_COLS must be what the model actually sees, or the
+    classification above is a label, not a fact."""
+    missing = RAW_FEATURE_COLS - set(feature_columns(feats))
+    assert not missing, f"declared raw features not in feature set: {missing}"
 
 
 def test_beats_the_mean_baseline(feats):
