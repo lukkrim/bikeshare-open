@@ -13,9 +13,21 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/check_leakage.sh",
+            "command": "\"${CLAUDE_PROJECT_DIR}\"/.claude/hooks/check_leakage.sh",
             "timeout": 60,
             "statusMessage": "Re-running leakage tests..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}\"/.claude/hooks/stop_require_green.sh",
+            "timeout": 120,
+            "statusMessage": "Checking the test suite is green..."
           }
         ]
       }
