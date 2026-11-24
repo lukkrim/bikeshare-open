@@ -1,19 +1,23 @@
 .PHONY: all data features train test clean model check-model
 
 # --- The pipeline ----------------------------------------------------------
+# Use the project venv (pinned versions) when it exists; a bare `python` may be
+# a system interpreter with different pandas/sklearn, which drifts the hgb row.
+PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python)
+
 all: data features train
 
 data:
-	python -m src.ingest
+	$(PYTHON) -m src.ingest
 
 features:
-	python -m src.features
+	$(PYTHON) -m src.features
 
 train:
-	python -m src.train
+	$(PYTHON) -m src.train
 
 test:
-	python -m pytest tests/ -q
+	$(PYTHON) -m pytest tests/ -q
 
 clean:
 	rm -f data/processed/*.parquet reports/metrics.json reports/*.png
