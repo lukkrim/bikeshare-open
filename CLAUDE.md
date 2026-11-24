@@ -17,6 +17,10 @@ rides) from calendar, weather, and lagged-demand features.
 - Any new lag or rolling feature must be built on a gap-free calendar
   index (`src.features.reindex_to_calendar`) and must `.shift(1)` before
   it aggregates. Add a test for it in `tests/test_leakage.py`.
+- Every raw column must be classified in `src/config.py` (FORBIDDEN,
+  RAW_FEATURE_COLS, ENCODED_COLS, DATE_COL); a new column goes in one first.
+- To prove a test can go red, use `/seed-fault <description>`. Never edit
+  `data/raw/`; seed data faults in a temp copy.
 - Report the mean baseline **and** the persistence baseline (yesterday's
   count) alongside every model. A negative R^2 is a finding, not a bug
   to hide.
