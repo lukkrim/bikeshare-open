@@ -88,6 +88,7 @@ if __name__ == "__main__":
     METRICS.parent.mkdir(parents=True, exist_ok=True)
     METRICS.write_text(json.dumps(metrics, indent=2) + "\n")
     train, valid, test = temporal_split(df)
-    summary = ", ".join(f"{k} test r2={v['test']['r2']}" for k, v in metrics.items())
+    # Valid only: test numbers stay in metrics.json, out of the iteration loop.
+    summary = ", ".join(f"{k} valid r2={v['valid']['r2']}" for k, v in metrics.items())
     print(f"OK train: {len(train)}/{len(valid)}/{len(test)} rows, "
           f"{len(feature_columns(df))} features -> {METRICS.name}; {summary}")

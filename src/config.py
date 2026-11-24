@@ -66,7 +66,11 @@ ENCODED_COLS = {"season", "mnth", "holiday", "weekday", "workday", "weather"}
 TRAIN_END = "2011-12-31"
 VALID_END = "2012-06-30"
 
-# Longest lag window in src/features.py. The first LAG_WARMUP calendar days
-# have no complete history and are dropped; tests/test_contract.py uses this
-# to bound how many rows may legitimately disappear.
-LAG_WARMUP = 7
+# Lag / rolling windows in src/features.py, in calendar days.
+WEEK = 7      # cnt_lag_7, cnt_roll_7
+MONTH = 28    # cnt_roll_28
+
+# Longest window above. The first LAG_WARMUP calendar days have no complete
+# history and are dropped; tests/test_contract.py uses this to bound how many
+# rows may legitimately disappear. Never use it as a lag length itself.
+LAG_WARMUP = max(WEEK, MONTH)
