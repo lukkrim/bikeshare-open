@@ -4,11 +4,8 @@ Daily Capital Bikeshare counts, 2011-2012. We forecast `cnt` (total daily
 rides) from calendar, weather, and lagged-demand features.
 
 ## Commands
-- `make data` - download raw CSV and assert its shape
-- `make features` - build `data/processed/features.parquet`
-- `make train` - fit models, write `reports/metrics.json`
-- `make test` - pytest; run this before claiming anything works
-- `make all` - the three pipeline stages in order
+- Reproduce everything: `make all && make test`.
+- Run `make test` before claiming anything works.
 
 ## Non-negotiable rules
 - **Never** put `casual` or `registered` in a feature set:
@@ -27,15 +24,12 @@ rides) from calendar, weather, and lagged-demand features.
 ## Style
 - Standard library, pandas, scikit-learn only. No new dependencies
   without asking. Versions are pinned in `requirements.txt`.
-- Modules are runnable: `python -m src.<module>` prints a one-line `OK ...`
-  summary.
 - Paths and constants live in `src/config.py`. Nothing is hardcoded twice.
 
 ## Gotchas
-- The mirror in `DATA_URL` is missing 2011-03-10. It is NOT the UCI file:
-  728 rows from 2011-01-03, not 731 from 2011-01-01.
-- `weather` uses the labels `GOOD` / `MISTY` / `BAD`, not the UCI codes 1-4.
+- The data is a mirror, not the UCI file: 728 rows from 2011-01-03, with
+  2011-03-10 missing. Do not "fix" this by switching sources.
 - Ridership grew ~65% from 2011 to 2012, so tree models trained on 2011
   cannot extrapolate to 2012. That is the headline result, not an error.
 - 2012-10-29 (Hurricane Sandy, 22 rides) is in the test set. Expect it in
-  any residual plot.
+  any residual plot; do not drop it.
