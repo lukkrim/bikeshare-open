@@ -67,6 +67,22 @@ def test_rolling_mean_excludes_today(feats, raw_cnt):
         assert value == pytest.approx(raw_cnt[window].mean()), f"bad cnt_roll_7 at {date.date()}"
 
 
+def test_roll_28_known_date(feats):
+    """cnt_roll_28 on 2012-03-01 is the mean of cnt on 2012-02-02..02-29
+    (28 days, all present in raw): sum 98558 / 28. Today is excluded."""
+    value = feats.set_index("dteday").cnt_roll_28[pd.Timestamp("2012-03-01")]
+    assert value == pytest.approx(98558 / 28)
+
+
+def test_roll_28_is_a_true_calendar_window(feats, raw_cnt):
+    """Every row: mean of raw cnt on d-1..d-28, no window spanning a gap."""
+    for date, value in feats.set_index("dteday").cnt_roll_28.items():
+        window = _calendar_window(date, range(1, 29))
+        absent = [d.date() for d in window if d not in raw_cnt.index]
+        assert not absent, f"cnt_roll_28 on {date.date()} spans absent days {absent}"
+        assert value == pytest.approx(raw_cnt[window].mean()), f"bad cnt_roll_28 at {date.date()}"
+
+
 def test_no_missing_values(feats):
     assert feats[feature_columns(feats)].isna().sum().sum() == 0
 
