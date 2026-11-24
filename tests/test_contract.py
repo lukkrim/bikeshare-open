@@ -13,7 +13,7 @@ from src.config import (
     TARGET,
 )
 from src.features import build_features, feature_columns, reindex_to_calendar
-from src.ingest import load_raw
+from src.ingest import load_raw, verify_raw
 from src.train import MODELS, temporal_split
 
 
@@ -49,6 +49,16 @@ def test_only_expected_rows_are_dropped(raw, feats):
     allowed_loss = LAG_WARMUP + LAG_WARMUP * missing_days
     lost = len(raw) - len(feats)
     assert lost <= allowed_loss, f"lost {lost} rows; expected at most {allowed_loss}"
+
+
+def test_raw_data_is_pristine():
+    """data/raw/ is read-only by contract. Permission rules stop the agent's
+    Write/Edit tools, but not every Bash write; this catches what they miss,
+    and the Stop hook runs it before any turn can end."""
+    verify_raw(RAW)
+    extra = sorted(p.name for p in RAW.parent.iterdir()
+                   if p.name != RAW.name and not p.name.startswith("."))
+    assert not extra, f"unexpected files in {RAW.parent.name}/: {extra}"
 
 
 def test_every_raw_column_is_classified():

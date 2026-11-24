@@ -161,3 +161,44 @@ Each fault was seeded in the working tree (data faults in a temp copy), the real
 - **Takeaway:** the `raise` is the first line of defence; the exact row-loss bound is the backstop. The bound would catch even one silently dropped row, because 56 is exact for this data.
 - **Fix:** `git checkout -- src/features.py`; suite back to `18 passed`.
 - **Agent turns to fix:** 1.
+
+## 4. Bash writes into `data/raw/` (the fault the hook cannot see)
+
+The PostToolUse hook matches only `Edit|Write`, and the deny rules name only `Write(./data/raw/**)` / `Edit(./data/raw/**)`. A Bash command is neither, so in principle it bypasses both.
+
+- **Attempt 1:** Bash `cp /tmp/tampered.csv data/raw/bike_daily_tampered.csv` (a new file; `bike_daily.csv` itself was never targeted). **Blocked** by Claude Code before running:
+  ```
+  cp to '/Users/wanfranek/Documents/DSC 180AB Capstone/MA6/bikeshare-open/data/raw/bike_daily_tampered.csv' was blocked by a deny rule.
+  ```
+  This Claude Code version applies the `Write(...)` deny rule to Bash commands it can parse as file writes, such as `cp`.
+- **Attempt 2:** the same copy done by `python -c "import shutil; shutil.copy(...)"`, which no path rule can parse. **Blocked**, this time by the auto-mode safety classifier, not by anything in the repo:
+  ```
+  Permission for this action was denied by the Claude Code auto mode classifier. Reason: [Undermining Oversight].
+  ```
+- **What happened:** nothing was written; `data/raw/` still holds only `bike_daily.csv`, SHA-256 `a6bed1577f6e4de5...`. **Hook stderr:** none; the hook never ran (Bash is not in its matcher).
+- **Why that is not enough:** attempt 2 was stopped by a session setting (auto mode), not by the project. A local model, a different permission mode, or a teammate's shell would have let the write through, and no test would have noticed: before this fix the suite never looked at the raw file's bytes.
+- **What catches it now (implemented):** a hash pin. `RAW_SHA256` in `src/config.py`; `src.ingest.verify_raw()` runs in `make data`; `tests/test_contract.py::test_raw_data_is_pristine` checks the hash and that `data/raw/` has no extra files. The Stop hook runs the full suite, so a turn cannot end with tampered raw data. This works whatever wrote the file. Shown on temp copies, tests pointed at them in-process:
+  (a) CSV with BAD relabelled STORMY:
+  ```
+  F                                                                        [100%]
+  =================================== FAILURES ===================================
+  E   ValueError: bike_daily.csv SHA-256 2d7007195825777c... != pinned a6bed1577f6e4de5...
+  /Users/wanfranek/Documents/DSC 180AB Capstone/MA6/bikeshare-open/src/ingest.py:32: ValueError: bike_daily.csv SHA-256 2d7007195825777c... != pinned a6bed1577f6e4de5...
+  =========================== short test summary info ============================
+  FAILED tests/test_contract.py::test_raw_data_is_pristine - ValueError: bike_d...
+  1 failed, 6 deselected in 1.26s
+  ```
+  (b) pristine CSV plus an extra file:
+  ```
+  F                                                                        [100%]
+  =================================== FAILURES ===================================
+  E   AssertionError: unexpected files in raw/: ['bike_daily_tampered.csv']
+      assert not ['bike_daily_tampered.csv']
+  /Users/wanfranek/Documents/DSC 180AB Capstone/MA6/bikeshare-open/tests/test_contract.py:61: AssertionError: unexpected files in raw/: ['bike_daily_tampered.csv']
+  =========================== short test summary info ============================
+  FAILED tests/test_contract.py::test_raw_data_is_pristine - AssertionError: un...
+  1 failed, 6 deselected in 1.11s
+  ```
+- **Limits:** it detects tampering after the fact. A PreToolUse hook on Bash could block some writes earlier, but matching every command that might write a file by pattern is brittle, so the hash is the guarantee and the deny rules are the convenience.
+- **A mistake worth recording:** my first run of (a) reported `1 passed`. The tampered file had never been created (it was part of the blocked command), and the in-process patch hit a different module object than the one pytest loaded. A seeded fault that never reaches the code proves nothing. Fixed by patching `item.module` from pytest's own collected items and checking for the expected red.
+- **Agent turns to fix:** 4 (add `RAW_SHA256`, `verify_raw`, the test, and the rerun after the false pass).
