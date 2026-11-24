@@ -1,6 +1,7 @@
 """Guard rails on the ingest contract and the trained model's behaviour."""
 import pandas as pd
 import pytest
+from sklearn.base import clone
 from sklearn.metrics import r2_score
 
 from src.config import (
@@ -86,12 +87,17 @@ def test_raw_features_reach_the_model(feats):
 
 
 def test_beats_the_mean_baseline(feats):
-    """A model that cannot beat predicting the training mean is not a result."""
+    """A model that cannot beat predicting the training mean is not a result.
+    Scored on VALIDATION: this runs on every `make test` (and the Stop hook),
+    so scoring test here would put the test set inside the iteration loop."""
     cols = feature_columns(feats)
-    train, _, test = temporal_split(feats)
-    ridge = MODELS["ridge"]
-    ridge.fit(train[cols], train[TARGET])
-    assert r2_score(test[TARGET], ridge.predict(test[cols])) > 0.4
+    train, valid, _ = temporal_split(feats)
+    scores = {}
+    for name in ("baseline_mean", "ridge"):
+        model = clone(MODELS[name]).fit(train[cols], train[TARGET])
+        scores[name] = r2_score(valid[TARGET], model.predict(valid[cols]))
+    assert scores["ridge"] > scores["baseline_mean"], scores
+    assert scores["ridge"] > 0.4, scores
 
 
 def test_persistence_baseline_is_reported():
