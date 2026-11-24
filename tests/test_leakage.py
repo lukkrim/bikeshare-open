@@ -31,30 +31,40 @@ def test_no_forbidden_features(feats):
     assert not (cols & FORBIDDEN), f"forbidden columns in feature set: {cols & FORBIDDEN}"
 
 
-def test_lags_are_true_calendar_lags(feats):
-    """cnt_lag_1 for date d must equal cnt on d-1, in calendar days."""
-    by_date = feats.set_index("dteday")[TARGET]
-    checked = 0
-    for date, lag in feats.set_index("dteday").cnt_lag_1.items():
-        prev = date - pd.Timedelta(days=1)
-        if prev in by_date.index:
-            assert lag == pytest.approx(by_date[prev]), f"bad lag at {date.date()}"
-            checked += 1
-    assert checked > 600, "too few rows actually verified"
+@pytest.fixture(scope="module")
+def raw_cnt():
+    """Ground truth by calendar date, from the raw file (not the feature
+    table, which has already dropped the rows around the gap)."""
+    return load_raw().set_index("dteday")[TARGET]
+
+
+def _calendar_window(date, days):
+    return [date - pd.Timedelta(days=k) for k in days]
+
+
+def test_lags_are_true_calendar_lags(feats, raw_cnt):
+    """cnt_lag_1 on d must equal raw cnt on d-1, cnt_lag_7 on d-7, on every
+    row. A row whose source day is absent from the raw data must not exist
+    at all: skipping it would hide a row-based shift across 2011-03-10."""
+    for date, row in feats.set_index("dteday").iterrows():
+        for col, k in (("cnt_lag_1", 1), ("cnt_lag_7", 7)):
+            (src,) = _calendar_window(date, [k])
+            assert src in raw_cnt.index, f"{col} on {date.date()} built from absent day {src.date()}"
+            assert row[col] == pytest.approx(raw_cnt[src]), f"bad {col} at {date.date()}"
 
 
 def test_lag_is_not_the_target(feats):
     assert not (feats.cnt_lag_1 == feats[TARGET]).all()
 
 
-def test_rolling_mean_excludes_today(feats):
-    """cnt_roll_7 must be the mean of the 7 calendar days *before* today."""
-    by_date = feats.set_index("dteday")[TARGET]
-    date = feats.dteday.iloc[200]
-    window = [date - pd.Timedelta(days=k) for k in range(1, 8)]
-    if all(d in by_date.index for d in window):
-        expected = sum(by_date[d] for d in window) / 7
-        assert feats.set_index("dteday").cnt_roll_7[date] == pytest.approx(expected)
+def test_rolling_mean_excludes_today(feats, raw_cnt):
+    """cnt_roll_7 on d must be the mean of raw cnt on d-1..d-7 (calendar
+    days, today excluded), on every row, with no window spanning a gap."""
+    for date, value in feats.set_index("dteday").cnt_roll_7.items():
+        window = _calendar_window(date, range(1, 8))
+        absent = [d.date() for d in window if d not in raw_cnt.index]
+        assert not absent, f"cnt_roll_7 on {date.date()} spans absent days {absent}"
+        assert value == pytest.approx(raw_cnt[window].mean()), f"bad cnt_roll_7 at {date.date()}"
 
 
 def test_no_missing_values(feats):
